@@ -2,9 +2,10 @@ const bodyParser = require('body-parser');
 const express = require('express');
 const mongoose = require('mongoose');
 const morgan = require('morgan');
+const bcrypt = require('bcrypt');
 
 const {DATABASE_URL, PORT} = require('./config');
-const {BlogPost} = require('./models');
+const {BlogPost, User} = require('./models');
 
 const app = express();
 
@@ -38,12 +39,33 @@ app.get('/posts/:id', (req, res) => {
     });
 });
 
+app.post('/users', (req, res) => {
+  const password = req.body.password;
+  bcrypt.genSalt(10, function(err, salt) {
+    bcrypt.hash(password, salt, function(err, hash){
+      if(err) 
+        return res.status(500);
+      User
+          .create({
+            username: req.body.username,
+            password: hash,
+            //this hashValue gets created and stored in the db 
+            firstName: req.body.firstName,
+            lastName: req.body.lastName
+          })
+          .then(user => {
+            res.json(user);
+          });
+    });
+  });
+});
+
 app.post('/posts', (req, res) => {
   const requiredFields = ['title', 'content', 'author'];
   for (let i=0; i<requiredFields.length; i++) {
     const field = requiredFields[i];
     if (!(field in req.body)) {
-      const message = `Missing \`${field}\` in request body`
+      const message = `Missing \`${field}\` in request body`;
       console.error(message);
       return res.status(400).send(message);
     }
@@ -57,8 +79,8 @@ app.post('/posts', (req, res) => {
     })
     .then(blogPost => res.status(201).json(blogPost.apiRepr()))
     .catch(err => {
-        console.error(err);
-        res.status(500).json({error: 'Something went wrong'});
+      console.error(err);
+      res.status(500).json({error: 'Something went wrong'});
     });
 
 });
@@ -144,13 +166,13 @@ function runServer(databaseUrl=DATABASE_URL, port=PORT) {
 // use it in our integration tests later.
 function closeServer() {
   return mongoose.disconnect().then(() => {
-     return new Promise((resolve, reject) => {
+    return new Promise((resolve, reject) => {
        console.log('Closing server');
        server.close(err => {
-           if (err) {
-               return reject(err);
+         if (err) {
+             return reject(err);
            }
-           resolve();
+         resolve();
        });
      });
   });
@@ -160,6 +182,6 @@ function closeServer() {
 // runs. but we also export the runServer command so other code (for instance, test code) can start the server as needed.
 if (require.main === module) {
   runServer().catch(err => console.error(err));
-};
+}
 
 module.exports = {runServer, app, closeServer};
